@@ -1,0 +1,14 @@
+name: Python verify
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    uses: dvd117/ci/.github/workflows/python-verify.yml@v1
+    with:
+      python-version: "3.12"

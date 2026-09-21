@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # A new advisory lands on a day nobody commits. Without this, npm audit only
+  # runs when something else happens to change.
+  schedule:
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    uses: dvd117/ci/.github/workflows/node-verify.yml@v1
+    with:
+      node-version: "22"
+
+  image:
+    needs: verify
+    uses: dvd117/ci/.github/workflows/image-smoke.yml@v1
+    with:
+      port: "3000"
+
+  ship:
+    needs: [verify, image]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: write
+    uses: dvd117/ci/.github/workflows/ship.yml@v1
+    with:
+      branch: production

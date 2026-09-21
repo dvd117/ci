@@ -1,0 +1,41 @@
+name: Ship
+
+on:
+  workflow_call:
+    inputs:
+      branch:
+        description: Branch that should advance to the calling commit.
+        required: false
+        default: production
+        type: string
+
+# The caller must grant contents: write on its ship job. A called workflow
+# cannot elevate permissions that the caller withheld.
+
+jobs:
+  ship:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Dokploy's auto-deploy watches the BRANCH, not CI, so pointing it at the
+      # branch you push to means a red build ships as fast as a green one.
+      #
+      # Do NOT try to fix that by turning auto-deploy off and calling the compose
+      # webhook from here: Dokploy's handler rejects the webhook when auto-deploy
+      # is off ("Automatic deployments are disabled for this compose"). Verified
+      # against v0.30.7. The two switches are the same switch.
+      #
+      # The gate that does work is a second branch. Point Dokploy at `production`
+      # and leave auto-deploy on; `production` only ever moves when this job
+      # advances it, and this job needs both jobs above. Day-to-day work still
+      # pushes straight to main.
+      #
+      # Fast-forward only: a hand-push to production makes this fail loudly rather
+      # than overwrite what is live.
+      - name: Advance the deployment branch to this commit
+        run: git push origin ${{ github.sha }}:refs/heads/${{ inputs.branch }}

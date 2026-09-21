@@ -1,0 +1,57 @@
+name: Python verify
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: Python version to install.
+        required: false
+        default: "3.12"
+        type: string
+      working-directory:
+        description: Directory containing the Python project.
+        required: false
+        default: .
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      # The dev group is optional for local tools. Use uv's full dev sync only
+      # when the project declares it; otherwise plain uv sync is the supported path.
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f pyproject.toml ] && awk '
+            /^\[dependency-groups\]$/ { in_dependency_groups=1; next }
+            /^\[tool\.uv\]$/ { in_tool_uv=1; next }
+            /^\[/ { in_dependency_groups=0; in_tool_uv=0 }
+            (in_dependency_groups && /^[[:space:]]*dev[[:space:]]*=/) ||
+              (in_tool_uv && /^[[:space:]]*dev-dependencies[[:space:]]*=/) { found=1 }
+            END { exit found ? 0 : 1 }
+          ' pyproject.toml; then
+            uv sync --all-extras --dev
+          else
+            uv sync
+          fi
+
+      - name: Lint
+        run: uv run ruff check .
+
+      # pytest exits 5 when no tests are collected. Let that exit code fail this job.
+      - name: Test
+        run: uv run pytest

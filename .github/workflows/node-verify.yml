@@ -1,0 +1,57 @@
+name: Node verify
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: Node.js version to install. Keep it in step with the Dockerfile's base image.
+        required: true
+        type: string
+      test-command:
+        description: Command used to run the test suite.
+        required: false
+        default: npm test
+        type: string
+      build-command:
+        description: Command used to build the project.
+        required: false
+        default: npm run build
+        type: string
+      audit-level:
+        description: Minimum npm audit severity that fails the job.
+        required: false
+        default: moderate
+        type: string
+      working-directory:
+        description: Directory containing the Node.js project.
+        required: false
+        default: .
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v7
+
+      # Per-project edits expected: node-version should match the Dockerfile's
+      # base image.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: npm
+          cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+      - run: npm ci
+      - run: ${{ inputs.test-command }}
+      - run: ${{ inputs.build-command }}
+
+      # An advisory should fail here, not arrive as a surprise badge on a
+      # public repository.
+      - run: npm audit --audit-level=${{ inputs.audit-level }}

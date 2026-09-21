@@ -1,0 +1,90 @@
+name: Image smoke
+
+on:
+  workflow_call:
+    inputs:
+      port:
+        description: Port exposed by the image and passed through PORT.
+        required: false
+        default: "3000"
+        type: string
+      docker-run-args:
+        description: Extra flags for docker run, such as -e KEY=VALUE.
+        required: false
+        default: ""
+        type: string
+      timeout-seconds:
+        description: Seconds to wait for the image healthcheck.
+        required: false
+        default: "30"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v3
+
+      # `npm run build` is not `docker build`. A Dockerfile that copies an explicit
+      # list of files out of src/ will happily ship without the module you just
+      # added — the job above stays green while the container dies on boot. This is
+      # the only step that catches that before Dokploy does.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: ci-candidate:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Per-project edits expected: docker-run-args should contain whichever env
+      # vars the server refuses to boot without.
+      # Building proves nothing about the CMD. Boot it and let the image's own
+      # HEALTHCHECK answer. Dummy env values only — the healthcheck endpoint
+      # must not call anything external.
+      - name: Boot the image and wait for its healthcheck
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap 'docker rm -f ci-smoke >/dev/null 2>&1 || true' EXIT
+
+          docker run -d --name ci-smoke \
+            -e "PORT=${{ inputs.port }}" \
+            ${{ inputs.docker-run-args }} \
+            ci-candidate:latest
+
+          healthcheck="$(docker inspect -f '{{if .Config.Healthcheck}}configured{{else}}missing{{end}}' ci-smoke)"
+          if [ "$healthcheck" = "missing" ]; then
+            echo "::error::image has no HEALTHCHECK; image-smoke requires the image's own HEALTHCHECK"
+            docker logs ci-smoke
+            exit 1
+          fi
+
+          for i in $(seq 1 "${{ inputs.timeout-seconds }}"); do
+            status="$(docker inspect -f '{{.State.Health.Status}}' ci-smoke 2>/dev/null || echo no-healthcheck)"
+            case "$status" in
+              healthy)
+                echo "healthy after ${i}s"
+                exit 0
+                ;;
+              no-healthcheck)
+                echo "::error::image has no HEALTHCHECK; image-smoke requires the image's own HEALTHCHECK"
+                docker logs ci-smoke
+                exit 1
+                ;;
+              unhealthy)
+                break
+                ;;
+            esac
+            sleep 1
+          done
+
+          echo "::error::container never reported healthy within ${{ inputs.timeout-seconds }} seconds"
+          docker logs ci-smoke
+          exit 1
