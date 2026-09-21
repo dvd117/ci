@@ -32,7 +32,7 @@ jobs:
 
       # `npm run build` is not `docker build`. A Dockerfile that copies an explicit
       # list of files out of src/ will happily ship without the module you just
-      # added — the job above stays green while the container dies on boot. This is
+      # added: the verify job stays green while the container dies on boot. This is
       # the only step that catches that before Dokploy does.
       - uses: docker/build-push-action@v6
         with:
@@ -46,7 +46,7 @@ jobs:
       # Per-project edits expected: docker-run-args should contain whichever env
       # vars the server refuses to boot without.
       # Building proves nothing about the CMD. Boot it and let the image's own
-      # HEALTHCHECK answer. Dummy env values only — the healthcheck endpoint
+      # HEALTHCHECK answer. Dummy env values only; the healthcheck endpoint
       # must not call anything external.
       - name: Boot the image and wait for its healthcheck
         shell: bash

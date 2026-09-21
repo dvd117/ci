@@ -55,9 +55,10 @@ does not allow a called workflow to elevate permissions withheld by its caller.
 
 ### `python-verify.yml`
 
-Installs Python with `astral-sh/setup-uv`, syncs project dependencies, runs Ruff,
-and runs pytest. If a project declares a `dev` dependency group, it uses
-`uv sync --all-extras --dev`; otherwise it uses `uv sync`. Pytest exit code 5
+Installs Python with `astral-sh/setup-uv` and runs `uv sync --all-extras`, adding
+`--locked` when `uv.lock` is committed so a stale lockfile fails like `npm ci` would.
+Ruff runs through `uvx` and pytest through `uv run --with pytest`, so neither has to
+be a declared dependency; tests still run in the project environment. Pytest exit code 5
 for no collected tests remains a failure, so every project must include at least
 one test.
 

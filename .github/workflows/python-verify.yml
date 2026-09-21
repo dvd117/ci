@@ -30,28 +30,20 @@ jobs:
         with:
           python-version: ${{ inputs.python-version }}
 
-      # The dev group is optional for local tools. Use uv's full dev sync only
-      # when the project declares it; otherwise plain uv sync is the supported path.
+      # uv includes the dev group by default and does not fail when there is none.
+      # With a committed uv.lock, --locked fails on drift, the uv analogue of npm ci.
       - name: Install dependencies
         shell: bash
         run: |
           set -euo pipefail
-          if [ -f pyproject.toml ] && awk '
-            /^\[dependency-groups\]$/ { in_dependency_groups=1; next }
-            /^\[tool\.uv\]$/ { in_tool_uv=1; next }
-            /^\[/ { in_dependency_groups=0; in_tool_uv=0 }
-            (in_dependency_groups && /^[[:space:]]*dev[[:space:]]*=/) ||
-              (in_tool_uv && /^[[:space:]]*dev-dependencies[[:space:]]*=/) { found=1 }
-            END { exit found ? 0 : 1 }
-          ' pyproject.toml; then
-            uv sync --all-extras --dev
-          else
-            uv sync
-          fi
+          if [ -f uv.lock ]; then uv sync --all-extras --locked; else uv sync --all-extras; fi
 
       - name: Lint
-        run: uv run ruff check .
+        # uvx runs ruff without the project having to declare it.
+        run: uvx ruff check .
 
       # pytest exits 5 when no tests are collected. Let that exit code fail this job.
       - name: Test
-        run: uv run pytest
+        # --with supplies pytest when the project does not declare it; tests still
+        # run inside the project environment, so they can import the package.
+        run: uv run --with pytest pytest
