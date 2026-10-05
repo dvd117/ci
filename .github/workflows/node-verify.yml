@@ -22,6 +22,11 @@ on:
         required: false
         default: moderate
         type: string
+      audit-allowlist:
+        description: Allowlist JSON path relative to the working directory.
+        required: false
+        default: .audit-allowlist.json
+        type: string
       working-directory:
         description: Directory containing the Node.js project.
         required: false
@@ -54,4 +59,8 @@ jobs:
 
       # An advisory should fail here, not arrive as a surprise badge on a
       # public repository.
-      - run: npm audit --audit-level=${{ inputs.audit-level }}
+      - uses: dvd117/ci/audit-gate@v1
+        with:
+          audit-level: ${{ inputs.audit-level }}
+          allowlist: ${{ inputs.audit-allowlist }}
+          working-directory: ${{ inputs.working-directory }}

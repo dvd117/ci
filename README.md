@@ -10,8 +10,8 @@ verification and deployment behavior.
 
 Checks out a Node.js project, installs its locked dependencies with `npm ci`,
 runs its tests and build, then fails on an npm advisory at or above the selected
-severity. The caller should set `node-version` to the version used by its
-Dockerfile base image.
+severity, except advisories in an unexpired allowlist. The caller should set
+`node-version` to the version used by its Dockerfile base image.
 
 | Input | Required | Default | Description |
 | --- | --- | --- | --- |
@@ -19,6 +19,7 @@ Dockerfile base image.
 | `test-command` | no | `npm test` | Test command. |
 | `build-command` | no | `npm run build` | Build command. |
 | `audit-level` | no | `moderate` | Minimum npm audit severity that fails the job. |
+| `audit-allowlist` | no | `.audit-allowlist.json` | Allowlist JSON path relative to the working directory. |
 | `working-directory` | no | `.` | Directory containing the Node.js project. |
 
 ### `image-smoke.yml`
@@ -137,3 +138,38 @@ jobs:
     with:
       python-version: "3.12"
 ```
+
+## Actions
+
+### audit-gate
+
+Use `dvd117/ci/audit-gate@v1` after installing Node.js and dependencies. Runs
+`npm audit --json` and fails on advisories at or above the selected severity
+unless explicitly allowlisted. Requires Node.js 22. No dependencies.
+
+| Input | Default | Description |
+| --- | --- | --- |
+| `audit-level` | `moderate` | Minimum severity: `low`, `moderate`, `high`, or `critical`. |
+| `allowlist` | `.audit-allowlist.json` | JSON path relative to the working directory. |
+| `working-directory` | `.` | Directory containing the Node.js project. |
+
+Commit an array of advisory IDs, expiry dates, and reasons:
+
+```json
+[
+  {
+    "id": "GHSA-vfj7-8cjw-p6xm",
+    "expires": "2026-11-05",
+    "reason": "No patched braces release; only used by dev tooling."
+  }
+]
+```
+
+A missing file means no exceptions. Malformed files or entries fail the gate.
+Expiry is checked against today's UTC date (the expiry day itself is valid);
+expired entries fail even if the advisory disappeared. Check for a patch before
+renewing or removing them. Unexpired entries no longer reported produce a
+cleanup warning. Allowlisted findings remain visible in logs with their expiry.
+Audit errors and invalid JSON fail closed.
+
+Run the decision-logic tests with `node --test audit-gate/*.test.mjs`.

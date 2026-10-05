@@ -1,0 +1,21 @@
+name: Audit gate
+description: Fail on npm advisories unless explicitly allowlisted with an expiry.
+inputs:
+  audit-level:
+    description: Minimum severity to fail (low, moderate, high, critical).
+    default: moderate
+  allowlist:
+    description: Allowlist JSON path relative to the working directory.
+    default: .audit-allowlist.json
+  working-directory:
+    description: Directory containing the Node.js project.
+    default: .
+runs:
+  using: composite
+  steps:
+    - run: node "$GITHUB_ACTION_PATH/audit-gate.mjs"
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        AUDIT_LEVEL: ${{ inputs.audit-level }}
+        AUDIT_ALLOWLIST: ${{ inputs.allowlist }}
